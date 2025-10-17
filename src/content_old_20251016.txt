@@ -1,0 +1,217 @@
+// content script - active tab의 DOM에 접근 가능
+console.log('=== 빅셀 로켓서플라이어 content script 시작 ===')
+console.log('현재 URL:', window.location.href)
+console.log('현재 시간:', new Date().toISOString())
+
+// 테이블이 로드될 때까지 대기하는 함수
+const waitForTable = (maxAttempts = 20, interval = 500) => {
+  return new Promise((resolve, reject) => {
+    let attempts = 0
+
+    const checkTable = () => {
+      attempts++
+      console.log(`테이블 찾기 시도 ${attempts}/${maxAttempts}`)
+
+      let table = document.querySelector('.react-bootstrap-table .table')
+
+      if (!table) {
+        table = document.querySelector('table.table')
+      }
+
+      if (!table) {
+        table = document.querySelector('.table')
+      }
+
+      // 디버깅: 페이지의 모든 테이블 확인
+      if (attempts === 1) {
+        const allTables = document.querySelectorAll('table')
+        console.log('페이지의 모든 테이블:', allTables)
+        const reactBootstrap = document.querySelectorAll('.react-bootstrap-table')
+        console.log('.react-bootstrap-table 요소:', reactBootstrap)
+      }
+
+      if (table) {
+        console.log('테이블 발견!', table)
+        resolve(table)
+      } else if (attempts >= maxAttempts) {
+        reject(new Error('테이블을 찾을 수 없습니다. 페이지를 확인해주세요.'))
+      } else {
+        setTimeout(checkTable, interval)
+      }
+    }
+
+    checkTable()
+  })
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'searchAndClick') {
+    ;(async () => {
+      try {
+        const orders = message.orders
+        console.log('content script - 받은 주문번호:', orders)
+
+        for (const order of orders) {
+          console.log(`\n=== 주문번호 ${order} 처리 시작 ===`)
+          const searchFilter = document.querySelector('.report-issue-search-filter')
+          console.log('searchFilter : ', searchFilter)
+          const searchFitlerChild = searchFilter.querySelectorAll(':scope > div > div')
+          console.log('searchFitlerChild : ', searchFitlerChild)
+          const searchInput = searchFitlerChild[1].querySelector('input')
+          console.log('searchInput : ', searchInput)
+          const searchBtn = searchFilter.querySelector('.search-btn')
+          console.log('searchBtn : ', searchBtn)
+
+          searchInput.value = order
+          console.log('searchInput.value : ', searchInput.value)
+          await sleep(1000)
+          searchBtn.click()
+          await sleep(1000)
+
+          const table = await waitForTable()
+          const rows = table.querySelectorAll('tbody tr')
+
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows[i]
+            const tds = row.querySelectorAll('td')
+            const orderNo = tds[1].innerText.trim()
+            if (orderNo === order) {
+              console.log(`✓ 주문번호 ${order} 발견!`)
+              tds[0].click()
+            }
+            await sleep(1000)
+          }
+        }
+
+        /*
+        const pagination = document.querySelector('.rc-pagination')
+        const paginationItems = pagination.querySelectorAll('li')
+        const totalPages = getTotalPages(paginationItems)
+        const nextPage = paginationItems[paginationItems.length - 1]
+
+        console.log('총 페이지 수:', totalPages)
+
+        let clickedCount = 0
+        let totalRows = 0
+
+        // 페이지별 처리 함수
+        const processPage = async (pageNum) => {
+          console.log(`\n=== 페이지 ${pageNum}/${totalPages} 처리 시작 ===`)
+          const table = await waitForTable()
+          const initialRows = table.querySelectorAll('tbody tr')
+          const rowCount = initialRows.length
+          totalRows += rowCount
+
+          // 각 행 처리
+          for (let i = 0; i < rowCount; i++) {
+            // ✅ 매 반복마다 '현재' DOM에서 다시 조회
+            const liveRows = table.querySelectorAll('tbody tr')
+            const liveRow = liveRows[i]
+            if (!liveRow) continue
+
+            const tds = liveRow.querySelectorAll('td')
+            if (tds.length <= 1) continue
+
+            const orderNo = tds[1].innerText.trim()
+            // console.log('try:', orderNo);
+
+            if (orders.includes(orderNo)) {
+              // 체크박스가 있다면 체크박스 자체를 클릭 (행 전체 클릭은 단일선택으로 바인딩된 경우가 많음)
+              const checkbox = liveRow.querySelector('input[type="checkbox"]')
+
+              if (checkbox) {
+                // React 제어형 컴포넌트 대비: 버블링/취소 가능 이벤트로 클릭
+                const evt = new MouseEvent('click', {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window,
+                })
+                checkbox.dispatchEvent(evt)
+              } else {
+                // 없으면 첫 셀 클릭
+                tds[0].dispatchEvent(
+                  new MouseEvent('click', { bubbles: true, cancelable: true, view: window })
+                )
+              }
+
+              clickedCount++
+
+              // ✅ 리렌더 타이밍 확보: rAF + 짧은 sleep
+              await new Promise(requestAnimationFrame)
+              await sleep(300)
+            } else {
+              // (선택) 모든 row 사이 소량 텀
+              await sleep(50)
+            }
+          }
+
+          console.log(`페이지 ${pageNum} 완료: ${clickedCount}개 선택됨`)
+
+          // 다음 페이지로 이동
+          if (pageNum < totalPages) {
+            //다음 페이지 버튼은 매 페이지마다 '다시' 찾기 (stale 방지)
+            const pagination = document.querySelector('.rc-pagination')
+            const nextBtn = pagination?.querySelector(
+              '.rc-pagination-next:not(.rc-pagination-disabled)'
+            )
+
+            if (nextBtn) {
+              nextBtn.dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true, view: window })
+              )
+              await sleep(120) // 클릭 직후 짧은 대기
+
+              // 페이지 변경 감지 (첫 행 비교)
+              const prevFirst = table.querySelector('tbody tr td:nth-child(2)')?.innerText.trim()
+              for (let k = 0; k < 30; k++) {
+                await sleep(200)
+                const currFirst = table.querySelector('tbody tr td:nth-child(2)')?.innerText.trim()
+                if (currFirst && currFirst !== prevFirst) break
+              }
+              await sleep(200)
+            }
+          }
+        }
+
+        // 모든 페이지를 순차적으로 처리
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+          await processPage(pageNum)
+        }
+
+        console.log(`\n=== 전체 완료 ===`)
+        console.log(`${totalPages}페이지, ${totalRows}행 중 ${clickedCount}개 선택`)
+
+        sendResponse({
+          success: true,
+          clickedCount: clickedCount,
+          totalRows: totalRows,
+          totalPages: totalPages,
+        })
+        */
+      } catch (err) {
+        console.error('content script 오류:', err)
+        sendResponse({
+          success: false,
+          error: err.message,
+        })
+      }
+    })()
+
+    return true // 비동기 응답을 위해 필요
+  }
+})
+
+const getTotalPages = (items) => {
+  const numberItems = Array.from(items)
+    .map((el) => el.textContent.trim())
+    .filter((txt) => /^\d+$/.test(txt)) // 정수 문자열만 남기기
+
+  // 2️⃣ 마지막 숫자 li 추출
+  const lastPageNumber = numberItems.length
+    ? parseInt(numberItems[numberItems.length - 1], 10)
+    : null
+
+  return lastPageNumber
+}
+
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms))

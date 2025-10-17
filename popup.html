@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>빅셀 로켓서플라이어</title>
+    <link rel="stylesheet" href="styles/popup.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="form-group">
+        <div class="form-row">
+          <div class="label required">기존 입고예정일 :</div>
+          <input id="q_date" type="date" />
+        </div>
+        <div class="form-row">
+          <div class="label">스토어ID :</div>
+          <input id="q_stores" type="text" placeholder="스토어 VendorID ex&#41; A000000000" />
+        </div>
+        <div class="form-row">
+          <button id="getOrderBtn">로켓발주서 엑셀 다운로드</button>
+        </div>
+
+        <div class="form-row">
+          <div class="label required">변경 입고예정일 :</div>
+          <input id="q_date_change" type="date" />
+        </div>
+        <div class="form-row">
+          <input id="fileInput" type="file" hidden accept=".xlsx,.xls" />
+          <button id="getCenterBtn" class="success">발주서 업로드</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/popup.js"></script>
+  </body>
+</html>

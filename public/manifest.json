@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "빅셀 - 로켓서플라이어",
+  "version": "1.1.1",
+  "description": "빅셀 로켓서플라이어",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "*://bigcell.co.kr/*",
+        "*://*.bigcell.co.kr/*",
+        "https://supplier.coupang.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["webRequest", "activeTab", "downloads", "scripting"],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "*://bigcell.co.kr/*",
+    "*://*.bigcell.co.kr/*",
+    "https://*.lambda-url.ap-northeast-2.on.aws/*",
+    "https://supplier.coupang.com/*"
+  ]
+}
