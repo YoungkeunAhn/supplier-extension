@@ -1,7 +1,7 @@
 import _ from 'lodash'
 import { Buffer } from 'buffer'
 import pako from 'pako'
-import backend from './api/backend.local'
+import backend from './api/backend.prod'
 import axios from 'axios'
 import * as Excel from 'exceljs/dist/exceljs.min.js'
 
