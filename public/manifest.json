@@ -28,7 +28,7 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["webRequest", "activeTab", "downloads", "scripting"],
+  "permissions": ["webRequest", "activeTab", "downloads", "scripting", "storage"],
   "host_permissions": [
     "http://localhost:3000/*",
     "*://bigcell.co.kr/*",

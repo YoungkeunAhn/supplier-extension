@@ -54,7 +54,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true
 
     case 'downloadCenterExcel':
-      downloadCenterExcel({ orders: message.orders })
+      downloadCenterExcel({ fcList: message.fcList })
         .then((res) => {
           sendResponse(res)
         })
@@ -65,6 +65,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'searchAndClickOrders':
       searchAndClickOrders({ tabId: message.tabId, orders: message.orders })
+        .then((res) => {
+          sendResponse(res)
+        })
+        .catch((err) => {
+          sendResponse({ error: err.message })
+        })
+      return true
+
+    case 'injectAndSendMessage':
+      injectAndSendMessage({ tabId: message.tabId, message: message.message })
         .then((res) => {
           sendResponse(res)
         })
@@ -199,6 +209,7 @@ const getSupplierCenter = async ({ orders, q_date }) => {
 const downloadOrdersExcel = async ({ orders }) => {
   try {
     const addHeaders = [
+      '스토어ID',
       '발주번호',
       '상품명',
       'SKU ID',
@@ -210,7 +221,7 @@ const downloadOrdersExcel = async ({ orders }) => {
       '입고예정일',
       '입고센터',
     ]
-    const addHeaderWidths = [20, 50, 20, 20, 20, 20, 20, 20, 20]
+    const addHeaderWidths = [20, 20, 50, 20, 20, 20, 20, 20, 20, 20]
 
     // ExcelJS로 워크북 생성
     const wb = new Excel.Workbook()
@@ -226,6 +237,7 @@ const downloadOrdersExcel = async ({ orders }) => {
 
     orders.forEach((order) => {
       let {
+        store_id,
         order_no,
         item_sku_name,
         item_sku_id,
@@ -239,14 +251,17 @@ const downloadOrdersExcel = async ({ orders }) => {
       } = order
 
       if (pending_detail) {
-        pending_detail = _.chain()
-          .get(JSON.parse(pending_detail), 'pending_detail')
-          .map((item) => `${item?.hq_stock_pending_arrived_date} - ${item?.hq_stock_pending_qty}`)
-          .join('\r\n')
-          .value()
+        const pending_detail_parsed = JSON.parse(pending_detail)
+
+        pending_detail =
+          _.chain(pending_detail_parsed)
+            .map((item) => `${item?.hq_stock_pending_arrive_date} - ${item?.hq_stock_pending_qty}`)
+            .join('\r\n')
+            .value() ?? ''
       }
 
       const rowData = [
+        store_id, // 스토어ID
         order_no, // 발주번호
         item_sku_name, // 상품명
         item_sku_id, // SKU ID
@@ -280,23 +295,10 @@ const downloadOrdersExcel = async ({ orders }) => {
   }
 }
 
-const downloadCenterExcel = async ({ orders }) => {
+const downloadCenterExcel = async ({ fcList }) => {
   try {
-    const addHeaders = [
-      '발주번호',
-      '상품명',
-      'SKU ID',
-      '발주수량',
-      '확정수량',
-      '남은본사재고',
-      '본사재고',
-      '입고예정수량',
-      '입고예정일',
-      '입고센터',
-      '변경센터',
-      '후보센터',
-    ]
-    const addHeaderWidths = [20, 50, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50]
+    const addHeaders = ['후보센터']
+    const addHeaderWidths = [50]
 
     // public 폴더의 엑셀 템플릿 파일 경로 가져오기
     const templateUrl = chrome.runtime.getURL('supplier_rocket_order.xlsx')
@@ -323,20 +325,11 @@ const downloadCenterExcel = async ({ orders }) => {
     })
 
     // 3행부터 데이터 입력
-    orders.forEach((order, index) => {
+    fcList.forEach((item, index) => {
       const row = sheet.getRow(3 + index)
-      row.getCell(6).value = order.order_no || ''
-      row.getCell(7).value = order.item_sku_name || ''
-      row.getCell(8).value = order.item_sku_id || ''
-      row.getCell(9).value = order.order_qty || 0
-      row.getCell(10).value = order.confirmed_qty || 0
-      row.getCell(11).value = order.remaining_hq_stock_qty_after || 0
-      row.getCell(12).value = order.hq_stock_qty || 0
-      row.getCell(13).value = order.hq_stock_pending_qty || 0
-      row.getCell(14).value = order.hq_stock_pending_arrived_date || ''
-      row.getCell(15).value = order.logis_center_name || ''
-      row.getCell(16).value = order.changed_center || '' // 변경센터
-      row.getCell(17).value = order.candidate_centers || '' // 후보센터
+      row.getCell(1).value = item.order_no || ''
+      row.getCell(2).value = item.center || ''
+      row.getCell(6).value = item.candidates.map((c) => c.fcName).join(',') || ''
     })
 
     // 엑셀 파일 생성
@@ -408,6 +401,55 @@ const searchAndClickOrders = async ({ tabId, orders }) => {
     }
   } catch (error) {
     console.error('background - searchAndClickOrders 오류:', error)
+    throw error
+  }
+}
+
+const injectAndSendMessage = async ({ tabId, message }) => {
+  try {
+    console.log('background - injectAndSendMessage 호출:', { tabId, message })
+
+    // 탭 정보 확인
+    const tab = await chrome.tabs.get(tabId)
+    console.log('background - 탭 정보:', tab.url)
+
+    // content script로 메시지 전송 시도
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, message)
+      console.log('background - content script 응답:', response)
+      return response
+    } catch (error) {
+      // content script가 로드되지 않은 경우 - 동적 inject 시도
+      if (error.message.includes('Could not establish connection')) {
+        console.log('background - content script inject 시도...')
+
+        try {
+          // content script 동적 inject
+          await chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            files: ['content.js'],
+          })
+
+          console.log('background - inject 성공, 재시도...')
+
+          // 더 긴 대기 시간
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+
+          const response = await chrome.tabs.sendMessage(tabId, message)
+          console.log('background - 재시도 성공:', response)
+          return response
+        } catch (injectError) {
+          console.error('background - inject 실패:', injectError)
+          // 더 자세한 에러 정보
+          throw new Error(
+            `Content script 로드 실패: ${injectError.message}. 페이지를 새로고침한 후 다시 시도해주세요.`
+          )
+        }
+      }
+      throw error
+    }
+  } catch (error) {
+    console.error('background - injectAndSendMessage 오류:', error)
     throw error
   }
 }
