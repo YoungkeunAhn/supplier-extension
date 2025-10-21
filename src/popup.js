@@ -42,8 +42,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return
       }
 
-      const orders = await sendMsgOrders(auth, q_date.value, q_stores.value)
-      const newOrders = transformOrders(orders)
+      const orders = await sendMsgSupplierOrders(q_date.value)
+      console.log('supplier orders : ', orders)
+
+      const sku_list = _.map(orders, (order) => order.item_sku_id)
+      if (sku_list.length === 0) {
+        alert('발주서를 불러올 수 없습니다. 새로고침 후 다시 시도해주세요.')
+        return
+      }
+      console.log('sku_list : ', sku_list)
+
+      const stocks = await sendMsgGetProductsStocks(auth, q_change_date.value, sku_list)
+      console.log('stocks : ', stocks)
+
+      const mergedOrders = _.chain(orders)
+        .map((o) => _.assign({}, o, _.find(stocks, { item_sku_id: o.item_sku_id })))
+        .value()
+
+      const newOrders = transformOrders(mergedOrders)
 
       if (newOrders) {
         await downloadOrdersExcel(newOrders)
@@ -149,6 +165,58 @@ const sleep = async (ms) => {
 // 로그인 확인
 const sendMsgGetAuth = async () => {
   const message = { action: 'getAuth' }
+  const res = chrome.runtime.sendMessage(message)
+  return res
+}
+
+// 로켓 발주서 조회
+const sendMsgSupplierOrders = async (q_date) => {
+  try {
+    const message = {
+      action: 'getSupplierOrders',
+      q_date,
+    }
+
+    // 쿠팡 서플라이어 페이지 탭 찾기
+    const tabs = await chrome.tabs.query({
+      url: '*://supplier.coupang.com/*',
+    })
+
+    if (tabs.length === 0) {
+      throw new Error('쿠팡 서플라이어 페이지가 열려있지 않습니다.')
+    }
+
+    const targetTab = tabs.find((tab) => tab.active) || tabs[0]
+
+    try {
+      const res = await chrome.tabs.sendMessage(targetTab.id, message)
+      return res
+    } catch (error) {
+      // Content script가 로드되지 않은 경우 - background script를 통해 처리
+      if (error.message.includes('Could not establish connection')) {
+        // Background script를 통해 content script 주입 및 메시지 전송 요청
+        const response = await chrome.runtime.sendMessage({
+          action: 'injectAndSendMessage',
+          tabId: targetTab.id,
+          message: message,
+        })
+        return response
+      }
+      throw error
+    }
+  } catch (err) {
+    throw new Error(err.message)
+  }
+}
+
+// 상품별 재고 조회
+const sendMsgGetProductsStocks = async (auth, q_change_date, sku_list) => {
+  const message = {
+    action: 'getProductsStocks',
+    auth,
+    q_change_date,
+    sku_list,
+  }
   const res = chrome.runtime.sendMessage(message)
   return res
 }

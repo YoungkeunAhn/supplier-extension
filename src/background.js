@@ -22,16 +22,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       return true
 
-    case 'getOrders':
-      getCoupangRocketOrders({ auth: message.auth, q_date: message.q_date })
+    case 'getProductsStocks':
+      getCoupangProductStocks({
+        auth: message.auth,
+        q_change_date: message.q_change_date,
+        sku_list: message.sku_list,
+      })
         .then((res) => {
           sendResponse(res)
         })
         .catch((err) => {
           sendResponse({ error: err.message })
         })
-
       return true
+
+    // case 'getOrders':
+    //   getCoupangRocketOrders({ auth: message.auth, q_date: message.q_date })
+    //     .then((res) => {
+    //       sendResponse(res)
+    //     })
+    //     .catch((err) => {
+    //       sendResponse({ error: err.message })
+    //     })
+
+    //   return true
 
     case 'getSupplierCenter':
       getSupplierCenter({ orders: message.orders, q_date: message.q_date })
@@ -121,6 +135,49 @@ const getAuth = async () => {
     }
 
     return res
+  } catch (error) {
+    // Sentry.captureException(error)
+    throw new Error(error.message)
+  }
+}
+
+const getCoupangProductStocks = async ({ auth, q_change_date, sku_list }) => {
+  try {
+    const { id_token } = auth
+
+    const stocks = await axios
+      .post(
+        `${backend.getCoupangProductsStocks}`,
+        {
+          q_change_date,
+          sku_list,
+        },
+        {
+          headers: {
+            Authorization: id_token,
+          },
+        }
+      )
+      .then(async (res) => {
+        if (res?.status === 200) {
+          const data = await res.data
+          if (data.status === 'succeed') {
+            const decodedData = atob(data.body)
+            const buffer = Buffer.from(decodedData, 'binary')
+            const decompressData = pako.inflate(buffer, { to: 'string' })
+            return decompressData
+          } else {
+            return null
+          }
+        } else {
+          return null
+        }
+      })
+      .then((res) => {
+        return JSON.parse(res).stocks
+      })
+
+    return stocks
   } catch (error) {
     // Sentry.captureException(error)
     throw new Error(error.message)
