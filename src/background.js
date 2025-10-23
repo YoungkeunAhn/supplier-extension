@@ -4,6 +4,7 @@ import pako from 'pako'
 import backend from './api/backend.prod'
 import axios from 'axios'
 import * as Excel from 'exceljs/dist/exceljs.min.js'
+import dayjs from 'dayjs'
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed!')
@@ -268,17 +269,22 @@ const downloadOrdersExcel = async ({ orders }) => {
     const addHeaders = [
       '스토어ID',
       '발주번호',
+      '물류센터',
+      '발주상태',
+      '상품번호',
+      '상품바코드',
       '상품명',
-      'SKU ID',
-      '발주수량',
-      '확정수량',
-      '남은본사재고',
-      '본사재고',
-      '입고예정수량',
-      '입고예정일',
-      '입고센터',
+      '요청수량',
+      '납품수량',
+      '창고재고',
+      '입고예정',
+      '본사입고예정일',
+      '비교재고',
+      '발주요청일',
+      '쿠팡 입고요청일',
+      '옵션ID',
     ]
-    const addHeaderWidths = [20, 20, 50, 20, 20, 20, 20, 20, 20, 20]
+    const addHeaderWidths = [10, 10, 10, 15, 10, 15, 50, 10, 10, 10, 10, 20, 10, 15, 15, 15]
 
     // ExcelJS로 워크북 생성
     const wb = new Excel.Workbook()
@@ -288,23 +294,45 @@ const downloadOrdersExcel = async ({ orders }) => {
     const headerRow = sheet.addRow(addHeaders)
     headerRow.eachCell((cell, colNum) => {
       sheet.getColumn(colNum).width = addHeaderWidths[colNum - 1]
-      cell.font = { bold: true }
-      cell.alignment = { vertical: 'middle', horizontal: 'center' }
+      // cell.font = { bold: true }
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+      }
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'c0c0c0' },
+      }
+      // 헤더에 테두리 적용
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' },
+      }
     })
+
+    console.log('orders : ', orders)
 
     orders.forEach((order) => {
       let {
         store_id,
         order_no,
+        logis_center_name,
+        order_status,
         item_sku_name,
         item_sku_id,
+        item_sku_barcode,
         order_qty,
         confirmed_qty,
-        remaining_hq_stock_qty_after,
         hq_stock_qty,
         hq_stock_pending_qty,
         pending_detail,
-        logis_center_name,
+        remaining_hq_stock_qty_after,
+        order_datetime,
+        expected_receive_date,
+        item_id,
       } = order
 
       if (pending_detail) {
@@ -320,17 +348,53 @@ const downloadOrdersExcel = async ({ orders }) => {
       const rowData = [
         store_id, // 스토어ID
         order_no, // 발주번호
+        logis_center_name, // 물류센터
+        order_status, // 발주상태
+        item_sku_id, // 상품번호
+        item_sku_barcode, // 상품바코드
         item_sku_name, // 상품명
-        item_sku_id, // SKU ID
-        order_qty, // 발주수량
-        confirmed_qty, // 확정수량
-        remaining_hq_stock_qty_after, // 남은본사재고
-        hq_stock_qty, // 본사재고
-        hq_stock_pending_qty, // 입고예정수량
-        pending_detail, // 입고예정일
-        logis_center_name, // 변경전 납품센터
+        parseInt(order_qty), // 요청수량
+        confirmed_qty || '', // 납품수량
+        hq_stock_qty || '', // 창고재고
+        hq_stock_pending_qty || '', // 입고예정
+        pending_detail || '', // 본사입고예정일
+        remaining_hq_stock_qty_after || '', // 비교재고
+        dayjs(order_datetime).format('YYYY-MM-DD') || '', // 발주요청일
+        dayjs(expected_receive_date).format('YYYY-MM-DD') || '', // 쿠팡 입고요청일
+        item_id || '', // 옵션ID
       ]
-      sheet.addRow(rowData)
+      const row = sheet.addRow(rowData)
+
+      // 모든 셀에 테두리 적용
+      row.eachCell((cell, colNum) => {
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' },
+        }
+      })
+
+      // 납품수량 열(9번째 열)에 노란색 배경 적용
+      row.getCell(9).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFF00' }, // 노란색
+      }
+
+      // 창고재고 열(10번째 열)에 하늘색 배경 적용
+      row.getCell(10).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: '87CEEB' }, // 하늘색
+      }
+
+      // 본사입고예정일 열(12번째 열)에 노란색 배경 적용
+      row.getCell(12).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFF00' }, // 노란색
+      }
     })
 
     // 엑셀 파일 생성

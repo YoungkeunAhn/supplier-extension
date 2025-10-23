@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .value()
 
       const newOrders = transformOrders(mergedOrders)
+      console.log('newOrders : ', newOrders)
 
       if (newOrders) {
         await downloadOrdersExcel(newOrders)
@@ -341,8 +342,8 @@ const transformOrders = (orders) => {
     let remainStock = toNum(initStock)
     let remainIncoming = toNum(initIncoming)
 
-    // 처리 순서: 주문 일시가 있으면 그걸로, 없으면 입력 순서 유지
-    const sorted = _.sortBy(rows, (r) => r.order_datetime ?? r.order_date ?? 0)
+    // 처리 순서: 발주량이 많은것부터 처리
+    const sorted = _.orderBy(rows, (r) => parseInt(r.order_qty), 'desc')
 
     sorted.forEach((row, idx) => {
       const need = toNum(row.order_qty)
