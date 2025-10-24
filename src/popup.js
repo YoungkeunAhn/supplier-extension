@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const auth = await sendMsgGetAuth()
 
-      if (!auth) {
+      if (auth?.error) {
         alert('빅셀에 먼저 로그인해주세요.')
         return
       }
@@ -130,8 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('orderCenters : ', orderCenters)
             const preferred = preferredFCs.value.split(',')
             console.log('preferred : ', preferred)
-
-            const result = decideCenterForBatch(orderCenters, preferred, {
+            const filterdOrderCenters = _.filter(orderCenters, (oc) => oc.center.length > 0)
+            const result = decideCenterForBatch(filterdOrderCenters, preferred, {
               centerFreq: 1,
               groupFreq: 0.5,
               preference: 1,
