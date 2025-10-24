@@ -101,10 +101,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 헤더 제외
                 const store_id = row.getCell(1).value
                 const order_no = row.getCell(2).value
-                const product_name = row.getCell(3).value
-                const item_sku_id = row.getCell(4).value
-                const order_qty = row.getCell(5).value
-                const confirmed_qty = row.getCell(6).value
+                const item_sku_id = row.getCell(5).value
+                const product_name = row.getCell(7).value
+                const order_qty = row.getCell(8).value
+                const confirmed_qty = row.getCell(9).value
+                const edd = row.getCell(15).value
+                const item_id = row.getCell(16).value
 
                 if (order_no) {
                   orders.push({
@@ -114,10 +116,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     item_sku_id,
                     order_qty,
                     confirmed_qty,
+                    edd,
+                    item_id,
                   })
                 }
               }
             })
+
+            fileInput.value = null
 
             orders = _.filter(orders, (order) => order.confirmed_qty > 0)
 
@@ -131,15 +137,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const preferred = preferredFCs.value.split(',')
             console.log('preferred : ', preferred)
             const filterdOrderCenters = _.filter(orderCenters, (oc) => oc.center.length > 0)
+            console.log('filterdOrderCenters : ', filterdOrderCenters)
+
+            if (filterdOrderCenters.length === 0) {
+              alert('변경 입고예정일에 납품 가능한 센터가 없습니다.')
+              return
+            }
+
             const result = decideCenterForBatch(filterdOrderCenters, preferred, {
               centerFreq: 1,
               groupFreq: 0.5,
               preference: 1,
             })
-
             console.log('result : ', result)
 
             const fcList = result.assignments
+            console.log('fcList : ', fcList)
             await downloadCenterExcel(fcList)
           } catch (error) {
             console.error('파일 처리 오류:', error)
@@ -462,6 +475,7 @@ const decideCenterForBatch = (orders, preferred = [], wOverrides = {}) => {
 
     return {
       order_no: o.order_no,
+      edd: o.edd,
       center: finalCenter,
       reason: centers.includes(batchCenter) ? 'batchCenter' : 'fallback',
       candidates: centers,

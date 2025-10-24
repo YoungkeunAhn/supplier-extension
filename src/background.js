@@ -441,15 +441,60 @@ const downloadCenterExcel = async ({ fcList }) => {
       const cell = headerRow.getCell(colIndex)
       cell.value = header
       cell.font = { bold: true }
-      cell.alignment = { vertical: 'middle', horizontal: 'center' }
-      sheet.getColumn(colIndex).width = addHeaderWidths[index]
     })
 
+    // D열에 요청사유 선택 옵션 추가
+    const requestReasons = [
+      '1.예약 가능한 잔여 슬롯 없음',
+      '2.납품 가능한 시간대의 슬롯 없음',
+      '3.물류센터 운영 임시 중단',
+      '4.밀크런 접수 불가',
+      '5.택배사 접수 불가',
+      '6.업체 생산 capa 초과',
+      '7.MOQ 이하 발주수량',
+      '8.물류비 절감을 위해',
+      '9.상품 수입 지연',
+      '10.재고 부족',
+      '11.업체 휴무',
+      '12.천재지변',
+      '13.정규 발주 입고일로 변경',
+      '14.상품 크기, 파렛트 이슈로 입고 불가',
+      '15.팔렛단위의 납품 불가(1 SKU = 1Pallet 납품 불가)',
+      '16.상품의 유통기한이 100일 이내 상품',
+      '17.행사 상품',
+      '18.상품 품절 임박/ 품절상태',
+    ]
+    const listColLetter = 'Z' // 보조 열
+    const listColIndex = 26 // Z = 26
+
+    requestReasons.forEach((text, i) => {
+      sheet.getCell(i + 1, listColIndex).value = text // Z1, Z2, ...
+    })
+    sheet.getColumn(listColIndex).hidden = true // 보조 열 숨김
+
     // 3행부터 데이터 입력
+    const sheetName = sheet.name
     fcList.forEach((item, index) => {
       const row = sheet.getRow(3 + index)
       row.getCell(1).value = item.order_no || ''
       row.getCell(2).value = item.center || ''
+      row.getCell(3).value = item.edd || ''
+
+      // D열 드롭다운: 같은 시트 범위(Z1:Z18) 참조 (교차 시트 금지!)
+      const dCell = row.getCell(4)
+      dCell.dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: [
+          `='${sheetName}'!$${listColLetter}$1:$${listColLetter}$${requestReasons.length}`,
+        ],
+        showErrorMessage: true,
+        errorStyle: 'warning',
+      }
+
+      // 기본 선택값 (목록 항목과 "완전히 동일"해야 함)
+      dCell.value = requestReasons[7]
+
       row.getCell(6).value = item.candidates.map((c) => c.fcName).join(',') || ''
     })
 

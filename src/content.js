@@ -116,11 +116,10 @@ const getCenters = async (orders, q_change_date) => {
   const uniqOrders = orders.filter(
     (order, index, self) => index === self.findIndex((o) => o.order_no === order.order_no)
   )
-  console.log('uniqOrders : ', uniqOrders)
 
   for (const order of uniqOrders) {
     const center = await getCenter(order, q_change_date)
-    centers.push({ order_no: order.order_no, center })
+    centers.push({ order_no: order.order_no, center, edd: order.edd })
     await sleepRand(500, 500)
   }
 
