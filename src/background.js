@@ -266,45 +266,38 @@ const getSupplierCenter = async ({ orders, q_date }) => {
 
 const downloadOrdersExcel = async ({ orders }) => {
   try {
-    const addHeaders = [
-      '스토어ID',
-      '발주번호',
-      '물류센터',
-      '발주상태',
-      '상품번호',
-      '상품바코드',
-      '상품명',
-      '요청수량',
-      '납품수량',
-      '창고재고',
-      '입고예정',
-      '본사입고예정일',
-      '비교재고',
-      '발주요청일',
-      '쿠팡 입고요청일',
-      '옵션ID',
+    const COLUMNS = [
+      { header: '스토어ID', key: 'store_id', width: 10 },
+      { header: '발주번호', key: 'order_no', width: 10 },
+      { header: '물류센터', key: 'logis_center_name', width: 10 },
+      { header: '발주상태', key: 'order_status', width: 15 },
+      { header: '상품번호', key: 'item_sku_id', width: 10 },
+      { header: '상품바코드', key: 'item_sku_barcode', width: 15 },
+      { header: '상품명', key: 'item_sku_name', width: 50 },
+      { header: '요청수량', key: 'order_qty', width: 10 },
+      { header: '납품수량', key: 'confirmed_qty', width: 10 },
+      { header: '창고재고', key: 'hq_stock_qty', width: 10 },
+      { header: '입고예정', key: 'hq_stock_pending_qty', width: 10 },
+      { header: '본사입고예정일', key: 'pending_detail', width: 20 },
+      { header: '비교재고', key: 'remaining_hq_stock_qty_after', width: 10 },
+      { header: '발주요청일', key: 'order_datetime', width: 10 },
+      { header: '쿠팡 입고요청일', key: 'expected_receive_date', width: 15 },
+      { header: '옵션ID', key: 'item_id', width: 15 },
     ]
-    const addHeaderWidths = [10, 10, 10, 15, 10, 15, 50, 10, 10, 10, 10, 20, 10, 15, 15, 15]
+    const headers = COLUMNS.map((column) => column.header)
+    const headerWidths = COLUMNS.map((column) => column.width)
 
     // ExcelJS로 워크북 생성
     const wb = new Excel.Workbook()
     const sheet = wb.addWorksheet('로켓서플라이어 주문')
 
     // 헤더 추가
-    const headerRow = sheet.addRow(addHeaders)
+    const headerRow = sheet.addRow(headers)
     headerRow.eachCell((cell, colNum) => {
-      sheet.getColumn(colNum).width = addHeaderWidths[colNum - 1]
+      sheet.getColumn(colNum).width = headerWidths[colNum - 1]
       // cell.font = { bold: true }
-      cell.alignment = {
-        vertical: 'middle',
-        horizontal: 'center',
-      }
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'c0c0c0' },
-      }
-      // 헤더에 테두리 적용
+      cell.alignment = { vertical: 'middle', horizontal: 'center' }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'c0c0c0' } }
       cell.border = {
         top: { style: 'thin' },
         left: { style: 'thin' },
